@@ -1,9 +1,8 @@
 ## How to install?
 Make sure to follow this guide
 ```
-git clone 
-cd 
 pip install -r requirements.txt
+
 ```
 
 ## Instructions
