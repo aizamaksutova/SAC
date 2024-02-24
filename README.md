@@ -1,37 +1,15 @@
-# Soft Actor-Critic (SAC) implementation in PyTorch
-
-This is PyTorch implementation of Soft Actor-Critic (SAC) [[ArXiv]](https://arxiv.org/abs/1812.05905).
-
-If you use this code in your research project please cite us as:
+## How to install?
+Make sure to follow this guide
 ```
-@misc{pytorch_sac,
-  author = {Yarats, Denis and Kostrikov, Ilya},
-  title = {Soft Actor-Critic (SAC) implementation in PyTorch},
-  year = {2020},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/denisyarats/pytorch_sac}},
-}
-```
-
-## Requirements
-We assume you have access to a gpu that can run CUDA 9.2. Then, the simplest way to install all required dependencies is to create an anaconda environment and activate it:
-```
-conda env create -f conda_env.yml
-source activate pytorch_sac
+git clone 
+cd 
+pip install -r requirements.txt
 ```
 
 ## Instructions
-To train an SAC agent on the `cheetah run` task run:
+To train an SAC agent on the cartpole-v1 task run:
 ```
-python train.py env=cheetah_run
+python3 train.py
 ```
-This will produce `exp` folder, where all the outputs are going to be stored including train/eval logs, tensorboard blobs, and evaluation episode videos. One can attacha tensorboard to monitor training by running:
-```
-tensorboard --logdir exp
-```
+All the necessary outputs can be seen in the `exp` folder
 
-## Results
-An extensive benchmarking of SAC on the DM Control Suite against D4PG. We plot an average performance of SAC over 3 seeds together with p95 confidence intervals. Importantly, we keep the hyperparameters fixed across all the tasks. Note that results for D4PG are reported after 10^8 steps and taken from the original paper.
-![Results](figures/dm_control.png)
-# aizik

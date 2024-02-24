@@ -10,32 +10,17 @@ import sys
 import time
 import pickle as pkl
 
-from video import VideoRecorder
 from logger import Logger
 from replay_buffer import ReplayBuffer
 import utils
 
-import dmc2gym
+import gym
 import hydra
 
 
-def make_env(cfg):
+def make_env():
     """Helper function to create dm_control environment"""
-    if cfg.env == 'ball_in_cup_catch':
-        domain_name = 'ball_in_cup'
-        task_name = 'catch'
-    else:
-        domain_name = cfg.env.split('_')[0]
-        task_name = '_'.join(cfg.env.split('_')[1:])
-
-    env = dmc2gym.make(domain_name=domain_name,
-                       task_name=task_name,
-                       seed=cfg.seed,
-                       visualize_reward=True)
-    env.seed(cfg.seed)
-    assert env.action_space.low.min() >= -1
-    assert env.action_space.high.max() <= 1
-
+    env = gym.make('CartPole-v1')
     return env
 
 
@@ -49,27 +34,37 @@ class Workspace(object):
         self.logger = Logger(self.work_dir,
                              save_tb=cfg.log_save_tb,
                              log_frequency=cfg.log_frequency,
-                             agent=cfg.agent.name)
+                             agent='sac')
 
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
         self.env = utils.make_env(cfg)
 
+
+        if isinstance(self.env.action_space, gym.spaces.Discrete):
+            action_dim = self.env.action_space.n
+            action_range = [0, action_dim - 1]
+        elif isinstance(self.env.action_space, gym.spaces.Box):
+            action_dim = self.env.action_space.shape[0]
+            action_range = [
+                float(self.env.action_space.low.min()),
+                float(self.env.action_space.high.max())
+            ]
+        else:
+            raise NotImplementedError("The action space type is not supported.")
+        
+        
         cfg.agent.params.obs_dim = self.env.observation_space.shape[0]
-        cfg.agent.params.action_dim = self.env.action_space.shape[0]
-        cfg.agent.params.action_range = [
-            float(self.env.action_space.low.min()),
-            float(self.env.action_space.high.max())
-        ]
+        cfg.agent.params.action_dim = action_dim
+        cfg.agent.params.action_range = action_range
         self.agent = hydra.utils.instantiate(cfg.agent)
+
 
         self.replay_buffer = ReplayBuffer(self.env.observation_space.shape,
                                           self.env.action_space.shape,
                                           int(cfg.replay_buffer_capacity),
                                           self.device)
 
-        self.video_recorder = VideoRecorder(
-            self.work_dir if cfg.save_video else None)
         self.step = 0
 
     def evaluate(self):
@@ -77,18 +72,15 @@ class Workspace(object):
         for episode in range(self.cfg.num_eval_episodes):
             obs = self.env.reset()
             self.agent.reset()
-            self.video_recorder.init(enabled=(episode == 0))
             done = False
             episode_reward = 0
             while not done:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
                 obs, reward, done, _ = self.env.step(action)
-                self.video_recorder.record(self.env)
                 episode_reward += reward
 
             average_episode_reward += episode_reward
-            self.video_recorder.save(f'{self.step}.mp4')
         average_episode_reward /= self.cfg.num_eval_episodes
         self.logger.log('eval/episode_reward', average_episode_reward,
                         self.step)
@@ -133,8 +125,9 @@ class Workspace(object):
             # run training update
             if self.step >= self.cfg.num_seed_steps:
                 self.agent.update(self.replay_buffer, self.logger, self.step)
-
-            next_obs, reward, done, _ = self.env.step(action)
+            
+            print(self.env.step(action))
+            next_obs, reward, done, _, _ = self.env.step(action)
 
             # allow infinite bootstrap
             done = float(done)
@@ -149,7 +142,7 @@ class Workspace(object):
             self.step += 1
 
 
-@hydra.main(config_path='config/train.yaml', strict=True)
+@hydra.main(config_path='conf/train.yaml', strict=True)
 def main(cfg):
     workspace = Workspace(cfg)
     workspace.run()

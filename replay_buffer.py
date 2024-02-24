@@ -1,53 +1,68 @@
+import collections
 import numpy as np
-import torch
-
 
 class ReplayBuffer(object):
-    """Buffer to store environment transitions."""
-    def __init__(self, obs_shape, action_shape, capacity, device):
-        self.capacity = capacity
-        self.device = device
+    def __init__(self, size):
+        """
+        Create Replay buffer.
+        Parameters
+        ----------
+        size: int
+            Max number of transitions to store in the buffer. When the buffer
+            overflows the old memories are dropped.
 
-        # the proprioceptive obs is stored as float32, pixels obs as uint8
-        obs_dtype = np.float32 if len(obs_shape) == 1 else np.uint8
-
-        self.obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
-        self.next_obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
-        self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
-        self.rewards = np.empty((capacity, 1), dtype=np.float32)
-        self.not_dones = np.empty((capacity, 1), dtype=np.float32)
-        self.not_dones_no_max = np.empty((capacity, 1), dtype=np.float32)
-
-        self.idx = 0
-        self.last_save = 0
-        self.full = False
+        Note: for this assignment you can pick any data structure you want.
+              If you want to keep it simple, you can store a list of tuples of (s, a, r, s') in self._storage
+              However you may find out there are faster and/or more memory-efficient ways to do so.
+        """
+        self._storage = collections.deque()
+        self._maxsize = size
 
     def __len__(self):
-        return self.capacity if self.full else self.idx
+        return len(self._storage)
 
-    def add(self, obs, action, reward, next_obs, done, done_no_max):
-        np.copyto(self.obses[self.idx], obs)
-        np.copyto(self.actions[self.idx], action)
-        np.copyto(self.rewards[self.idx], reward)
-        np.copyto(self.next_obses[self.idx], next_obs)
-        np.copyto(self.not_dones[self.idx], not done)
-        np.copyto(self.not_dones_no_max[self.idx], not done_no_max)
+    def add(self, obs_t, action, reward, obs_tp1, done):
+        '''
+        Make sure, _storage will not exceed _maxsize.
+        Make sure, FIFO rule is being followed: the oldest examples has to be removed earlier
+        '''
+        data = (obs_t, action, reward, obs_tp1, done)
+        storage = self._storage
+        maxsize = self._maxsize
+        if len(storage) >= maxsize:
+          storage.popleft()
 
-        self.idx = (self.idx + 1) % self.capacity
-        self.full = self.full or self.idx == 0
+        storage.append(data)
+
 
     def sample(self, batch_size):
-        idxs = np.random.randint(0,
-                                 self.capacity if self.full else self.idx,
-                                 size=batch_size)
+        """Sample a batch of experiences.
+        Parameters
+        ----------
+        batch_size: int
+            How many transitions to sample.
+        Returns
+        -------
+        obs_batch: np.array
+            batch of observations
+        act_batch: np.array
+            batch of actions executed given obs_batch
+        rew_batch: np.array
+            rewards received as results of executing act_batch
+        next_obs_batch: np.array
+            next set of observations seen after executing act_batch
+        done_mask: np.array
+            done_mask[i] = 1 if executing act_batch[i] resulted in
+            the end of an episode and 0 otherwise.
+        """
+        storage = self._storage
+        idx = np.random.randint(len(storage), size=batch_size)
+        batch = [storage[x] for x in idx]
 
-        obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
-        actions = torch.as_tensor(self.actions[idxs], device=self.device)
-        rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
-        next_obses = torch.as_tensor(self.next_obses[idxs],
-                                     device=self.device).float()
-        not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
-        not_dones_no_max = torch.as_tensor(self.not_dones_no_max[idxs],
-                                           device=self.device)
+        obs_batch = np.array([x[0] for x in batch], copy=False)
+        act_batch = np.array([x[1] for x in batch], copy=False)
+        rew_batch = np.array([x[2] for x in batch], copy=False)
+        next_obs_batch = np.array([x[3] for x in batch], copy=False)
+        done_mask = np.array([x[4] for x in batch], copy=False)
 
-        return obses, actions, rewards, next_obses, not_dones, not_dones_no_max
+        return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask
