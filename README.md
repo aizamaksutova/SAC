@@ -2,7 +2,7 @@
 Make sure to follow this guide
 ```
 pip install -r requirements.txt
-
+git clone https://github.com/google-deepmind/dm_control.git
 ```
 
 ## Instructions
